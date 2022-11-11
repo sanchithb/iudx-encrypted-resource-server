@@ -1,79 +1,46 @@
-# pip install pynacl
-
 import json
 import base64
-from nacl.public import SealedBox , PublicKey
+from nacl.public import SealedBox , PublicKey, PrivateKey
 from iudx.rs.ResourceServer import ResourceServer
 from iudx.rs.ResourceQuery import ResourceQuery
 
-# base class
-class EncryptedResourceServer():
+from typing import  List, Dict
+
+from iudx.rs.ResourceResult import ResourceResult
+
+from iudx.auth.Token import Token
+
+import multiprocessing
+
+temp_key_store = {}
+
+
+class EncryptedResourceServer(ResourceServer):
     
-    def ers(self, rs_url, headers, key, entity_id):
-        # taking the parameters passed to the class
-        self.rs_url = rs_url
-        self.headers = headers
-        self.key = key
-        self.entity_id = entity_id
-
-        # creating an object of ResourceServer class using rs_url.
-
-        rs = ResourceServer(
-         rs_url=self.rs_url,
-         headers=self.headers
-        )
-
-        # creating a query for fetching latest data for the entity_id.
-        rs_query = ResourceQuery()
-        rs_entity = rs_query.add_entity(entity_id)
-
-        # fetch results for a list of entities.
-        results = rs.get_latest([rs_entity])
-
-        # store the result type in a variable
-        result_type = results[0].type
-
-        # store the result data in a variable to be further encrypted
-        message = results[0].results
-
-        # take the public key passed
-
-        str_b_public_key = self.key
-
-        # Decode it from base64
-
-        b64_b_public_key = base64.urlsafe_b64decode(str_b_public_key)
-
-        # convert the bytes to object type
-
-        public_key = PublicKey(b64_b_public_key)
-
-        # Create a SealedBox object
-
-        sealed_box = SealedBox(public_key)
-
-        # Convert the JSON data to bytes
-        message_bytes = json.dumps(message).encode()
-
-        encrypted = sealed_box.encrypt(message_bytes)
-
-        # encrypted is of type bytes and it is not JSON Serializable
-        # We convert it to string and send it
-
-        b64_encrypted = base64.urlsafe_b64encode(encrypted)
-
-        str_encrypted = b64_encrypted.decode("utf-8")
-
-        encrypted_result = {
-            "results":[
-                {
-                    "Encrypted Data": [str_encrypted]
-                }
-            ]
-        }
-
-        return encrypted_result, result_type
-
-    
-
+    def __init__(self, rs_url: str=None, token: str=None, token_obj: Token=None,
+                 headers: Dict[str, str]=None, publickey: str=None):
         
+        super().__init__(rs_url, token, token_obj, headers)
+        
+        global temp_key_store 
+        temp_key_store = self.key_gen()
+
+        self.public_key = temp_key_store[1]
+    
+        self.headers[publickey]
+
+
+    def key_gen():
+        private_key = PrivateKey.generate()
+
+        public_key = private_key.public_key
+
+        return private_key, public_key
+
+    def get_latest(self, queries: List[ResourceQuery]) -> List[ResourceResult]:
+
+        super().get_latest(queries)
+
+        ers_results = self.rs_results
+
+
